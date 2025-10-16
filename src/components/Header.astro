@@ -1,0 +1,84 @@
+---
+import TextSlider from "../components/TextSlider.astro";
+import Separator from "../components/Separator.astro";
+import Search from "../components/Search.astro";
+import Cross from "../assets/images/cross.svg";
+
+// Get the current pathname
+const currentPath = Astro.url.pathname;
+// Define a map of routes
+const routes = {
+  "/": "Home",
+  "/releases/": "Releases",
+  "/store/": "Store",
+  "/history/": "Contexto",
+  "/contact/": "Contact",
+};
+// Determine the active route
+const activeRoute = routes[currentPath] || null;
+---
+
+<header>
+  <h1>
+    <a href="/" class={activeRoute === "Home" ? "current" : ""}
+      ><TextSlider content="Mapa Fílmico" /></a>
+  </h1>
+  <span><TextSlider content="Encuesta" /></span>
+  <ul>
+    <li>
+      <a
+        href="/history/"
+        class={activeRoute === "History" ? "current" : ""}
+        data-astro-prefetch><TextSlider content="Contexto" /></a>
+    </li>
+     <li>
+      <a
+        href="/contact/"
+        class={activeRoute === "Contact" ? "current" : ""}
+        data-astro-prefetch><TextSlider content="Contacto" /></a>
+    </li>
+        <div>
+      <button data-search class="search"><TextSlider content="Buscar" /></button
+      >
+      <button data-clear class="clear hidden" aria-label="Borrar búsqueda">
+        <Cross width={14} height={14} />
+      </button>
+    </div>
+
+  </ul>
+</header>
+<Separator />
+<Search />
+
+<style>
+  header {
+    position: relative;
+    display: grid;
+    grid-template-columns: min-content auto;
+    font-weight: 700;
+    padding: 1rem 0 0 0;
+    gap: 1rem;
+  }
+  header a.current {
+    pointer-events: none;
+  }
+  h1 {
+    font-size: 1rem;
+    font-weight: inherit;
+    margin: 0;
+  }
+  ul {
+    display: flex;
+    list-style: none;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    grid-column: auto / span 2;
+  }
+  @media screen and (min-width: 50em) {
+    header {
+      grid-template-columns: 20vw 1fr auto auto;
+    }
+  }
+</style>
+<script src="../scripts/gridActions.js"></script>
