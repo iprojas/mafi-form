@@ -3,85 +3,332 @@ import type { CollectionEntry } from "astro:content";
 import { getCollection, render } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import Separator from "../components/Separator.astro";
-import AlbumGrid from "../components/AlbumGrid.astro";
-
 export const getStaticPaths = async () => {
-  // Fetch all artists from the 'artists' collection
   const artists = await getCollection("artists");
-
-  // Map over the artists to generate paths for each artist's page
-  const paths = artists.map((artist) => {
-    return {
-      params: { artist_id: artist.id }, // URL parameter for the artist's ID
-      props: { artists, artist }, // Pass the full artist and all artists as props
-    };
-  });
-
-  // Return the generated paths to Astro for static page generation
-  return paths;
+  return artists.map((artist) => ({
+    params: { artist_id: artist.id },
+    props: { artists, artist },
+  }));
 };
 
 type Props = {
-  artists: CollectionEntry<"artists">[]; // Array of all artists in the collection
-  artist: CollectionEntry<"artists">; // Current artist being rendered
+  artists: CollectionEntry<"artists">[];
+  artist: CollectionEntry<"artists">;
 };
 
-const { artists, artist } = Astro.props; // Extract the artists list and current artist from the props
+const { artists, artist } = Astro.props;
 
-// Extract the ID of the current artist
 const artist_id = artist.id;
-
-// Find the index of the current artist in the artists array
-const currentArtistIndex = artists.findIndex((a) => a.id === artist_id);
-
-// Calculate the index of the "next" artist in the array (wrap around if at the last artist)
-const nextArtistIndex = (currentArtistIndex + 1) % artists.length;
-
-// Get the "next" artist based on the calculated index
-const nextArtist = artists[nextArtistIndex];
-
-// Fetch all albums that belong to the current artist
-const albums = await getCollection(
-  "albums",
-  ({ data }) => data.artist.id === artist_id,
-);
-
-// Render the content of the current artist (e.g., markdown or MDX)
 const { Content } = await render(artist);
 ---
 
-<BaseLayout title={artist.data.name}>
-  <section>
+<BaseLayout title={artist.data.stage_name}>
+  <section id="artist-page" data-artist-id={artist_id}>
     <header class="title-header">
-      <h2>{artist.data.stage_name}</h2>
+      <h2 id="film-title" data-film-title>{artist.data.stage_name}</h2>
       <h4 class="faded">por {artist.data.name}</h4>
-     
     </header>
+
     <Separator />
+
     <div class="content-wrap">
       <img
+        id="main-image"
         class="image fade-in"
         src={artist.data.image.src}
-        alt={artist.data.image.alt}
       />
+      
+      
+      
       <div class="content">
-        <h3>Biography</h3>
-        <Content />
-        <dl>
-          <dt>Genre</dt><dd>{artist.data.genre}</dd>
-        </dl>
+        <!-- ===== Formulario ===== -->
+        <form id="feedback-form" class="stack" autocomplete="on" novalidate>
+          <fieldset class="stack">
+            <legend class="sr-only">Formulario</legend>
+
+            <div class="row">
+              <label for="f-name">Nombre</label>
+              <input id="f-name" name="name" type="text"/>
+            </div>
+
+            <div class="row">
+              <label for="f-phone">Teléfono *</label>
+              <input id="f-phone" name="phone" type="tel" inputmode="tel" />
+            </div>
+
+            <div class="row">
+              <label for="f-email">Email *</label>
+              <input id="f-email" name="email" type="email" required />
+            </div>
+
+            <div class="row">
+              <label for="f-comment">Comentario</label>
+              <textarea id="f-comment" name="comment" rows="6" placeholder="Escribe tu mensaje…"></textarea>
+            </div>
+
+            <div class="row">
+              <label>Audio</label>
+              <div class="audio-controls">
+                <button type="button" id="record-btn" class="record-btn" title="Grabar / Detener">🔴 Grabar</button>
+                <audio id="audio-preview" controls style="display:none; max-width: 100%;"></audio>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button id="send-btn" class="send-btn" type="submit" title="Enviar formulario">Enviar</button>
+            </div>
+          </fieldset>
+        </form>
+
+        <div id="status" class="status" aria-live="polite"></div>
       </div>
     </div>
   </section>
+
+  <style>
+    /* Layout simple y balanceado (sin copiar el estilo de la maqueta) */
+    .stack { display: grid; gap: 0.9rem; border:none }
+    .row { display: grid; gap: 0.35rem; }
+    .audio-controls { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .form-actions { margin-top: 0.25rem; }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--border, rgba(0,0,0,.15));
+      padding: .6rem .7rem;
+      border-radius: 10px;
+      background: var(--surface, #fff);
+    }
+
+    .record-btn, .send-btn {
+      border: 0; outline: 0;
+      padding: .7rem 1rem;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .08s ease, box-shadow .2s ease, opacity .2s ease;
+      box-shadow: 0 3px 18px rgba(0,0,0,.12);
+    }
+    .record-btn { background: #ffe7e7; }
+    .record-btn.recording { background: #ffd1d1; }
+    .send-btn { background: #e7f5ff; }
+    .send-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .status { margin-top: .5rem; min-height: 1.25rem; opacity: .85; font-size: .95rem; }
+
+    .content-wrap {
+      grid-template-areas: "img img" "content content";
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+    @media (max-width: 900px) {
+      .content-wrap {
+        grid-template-areas: "img" "content";
+        grid-template-columns: 100%;
+      }
+    }
+  </style>
+
+  <!-- Client-only script: Firebase + Audio + Envío -->
+  <script type="module">
+    // ---- Firebase ----
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js';
+    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js';
+    import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.0.0/firebase-storage.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCNIC9rjV2AVhDTtlYfNa7Jq5LUU6114Jc",
+      authDomain: "mafi-form.firebaseapp.com",
+      projectId: "mafi-form",
+      storageBucket: "mafi-form.firebasestorage.app",
+      messagingSenderId: "599627382329",
+      appId: "1:599627382329:web:7f2341eb374f986a4b97e8"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    // ---- Utilidades ----
+    const statusEl  = document.getElementById('status');
+    const formEl    = document.getElementById('feedback-form');
+    const sendBtn   = document.getElementById('send-btn');
+    const nameEl    = document.getElementById('f-name');
+    const phoneEl   = document.getElementById('f-phone');
+    const emailEl   = document.getElementById('f-email');
+    const commentEl = document.getElementById('f-comment');
+
+    const artistSection = document.getElementById('artist-page');
+    const artistId  = artistSection?.dataset.artistId || 'unknown-artist';
+    const filmTitle = document.getElementById('film-title')?.textContent?.trim() || 'Unknown';
+    const imgEl     = document.getElementById('main-image');
+    const imgAlt    = imgEl?.getAttribute('alt') || filmTitle || artistId;
+
+    function logStatus(msg) { if (statusEl) statusEl.textContent = msg || ''; }
+    function slugify(s) { return (s || '').toLowerCase().replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,''); }
+
+    // ---- Audio (no se sube al detener; solo al enviar) ----
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let activeStream = null;
+    let pendingAudioBlob = null;
+
+    const recordBtn    = document.getElementById('record-btn');
+    const audioPreview = document.getElementById('audio-preview');
+
+    recordBtn?.addEventListener('click', () => {
+      if (recordBtn.classList.contains('recording')) stopRecording();
+      else startRecording();
+    });
+
+    async function startRecording() {
+      try {
+        if (mediaRecorder && mediaRecorder.state === 'recording') return;
+
+        activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(activeStream, { mimeType: 'audio/webm' });
+        audioChunks = [];
+        pendingAudioBlob = null;
+
+        mediaRecorder.ondataavailable = (evt) => { if (evt.data?.size) audioChunks.push(evt.data); };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          pendingAudioBlob = blob;
+          const localUrl = URL.createObjectURL(blob);
+          audioPreview.src = localUrl;
+          audioPreview.style.display = 'block';
+          logStatus('🎧 Audio listo. Revisa/edita el formulario y presiona “Enviar”.');
+          cleanupStream();
+          recordBtn.textContent = '🔴 Regrabar';
+          recordBtn.classList.remove('recording');
+        };
+
+        mediaRecorder.start();
+        recordBtn.textContent = '⏹️ Detener';
+        recordBtn.classList.add('recording');
+        logStatus('🔴 Grabando…');
+      } catch (err) {
+        console.error('Error starting recording:', err);
+        logStatus('⚠️ No se pudo iniciar la grabación. Revisa permisos del micrófono.');
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+    }
+
+    function cleanupStream() {
+      if (activeStream) {
+        activeStream.getTracks().forEach(t => t.stop());
+        activeStream = null;
+      }
+      mediaRecorder = null;
+      audioChunks = [];
+    }
+
+    async function uploadAudio(audioBlob, whoForName, whoForEmail) {
+      const ts = Date.now();
+      const who  = slugify(whoForName) || slugify(whoForEmail) || 'anon';
+      const safeArtist = slugify(artistId || 'artist');
+      const filename = `${who}_${ts}.webm`;
+      const path = `audio/${safeArtist}/${filename}`;
+
+      const storageRef = ref(storage, path);
+      const task = uploadBytesResumable(storageRef, audioBlob);
+
+      return new Promise((resolve, reject) => {
+        task.on('state_changed',
+          (snap) => {
+            const pct = ((snap.bytesTransferred / snap.totalBytes) * 100) || 0;
+            logStatus(`⬆️ Subiendo audio… ${pct.toFixed(0)}%`);
+          },
+          (err) => reject(err),
+          async () => {
+            const url = await getDownloadURL(task.snapshot.ref);
+            logStatus('✅ Audio subido.');
+            resolve({ url, path, filename });
+          }
+        );
+      });
+    }
+
+    // ---- Envío del formulario (reemplaza "Votar") ----
+    formEl?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        // Validaciones mínimas
+        const name  = nameEl?.value.trim();
+        const phone = phoneEl?.value.trim();
+        const email = emailEl?.value.trim();
+        if (!name || !phone || !email || (emailEl && !emailEl.checkValidity())) {
+          logStatus('⚠️ Completa Nombre, Teléfono y un Email válido.');
+          return;
+        }
+
+        sendBtn.disabled = true;
+        logStatus('⏳ Enviando…');
+
+        // Subir audio solo ahora
+        let audioUrl = null, audioPath = null, audioFilename = null;
+        if (pendingAudioBlob) {
+          const uploaded = await uploadAudio(pendingAudioBlob, name, email);
+          audioUrl = uploaded.url;
+          audioPath = uploaded.path;
+          audioFilename = uploaded.filename;
+        }
+
+        // Guardar en la MISMA DB (colección "votes") con toda la info
+        await addDoc(collection(db, 'votes'), {
+          type: 'submission',           // para distinguir de votos antiguos
+          isVote: true,                 // mantiene compatibilidad con cualquier conteo
+          film: filmTitle,
+          artistId,
+          imageAlt: imgAlt,
+          name, phone, email,
+          comment: commentEl?.value.trim() || '',
+          audioUrl: audioUrl || null,
+          audioPath: audioPath || null,
+          audioFilename: audioFilename || null,
+          submittedAt: serverTimestamp()
+        });
+
+        // Reset
+        formEl.reset();
+        if (audioPreview) {
+          audioPreview.removeAttribute('src');
+          audioPreview.style.display = 'none';
+        }
+        pendingAudioBlob = null;
+        recordBtn.textContent = '🔴 Grabar';
+        logStatus('✅ ¡Gracias! Tu respuesta fue enviada.');
+      } catch (err) {
+        console.error('Submit error:', err);
+        logStatus('⚠️ Ocurrió un error al enviar. Intenta nuevamente.');
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+  </script>
 </BaseLayout>
+
 <style>
-  .content-wrap {
-    grid-template-areas: "img" "content";
+    .content-wrap {
+    grid-template-areas: "img" "content" "albums";
     grid-template-columns: 100%;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "img img" "content albums";
+    @media screen and (min-width: 44em) {
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "img img" "content albums";
+    }
+    @media screen and (min-width: 50em) {
+      grid-template-columns: 30vw 1fr 170px;
+      grid-template-areas: "img content albums";
+    }
   }
-  
+  .albums {
+    grid-area: albums;
+  }
   .content p:last-child {
     margin-top: 2.5rem;
     display: flex;

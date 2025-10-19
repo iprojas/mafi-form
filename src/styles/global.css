@@ -159,10 +159,10 @@ img {
   gap: 1rem;
 }
 
-.content-wrap {
+..content-wrap {
   display: grid;
-  gap: 0;
-  padding: 0;
+  gap: 2rem;
+  padding: 3rem 0 10vh;
   grid-template-columns: 100%;
   grid-auto-columns: auto;
   grid-template-areas: 'img' 'content';
